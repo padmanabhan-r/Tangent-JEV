@@ -22,14 +22,22 @@ export function Tangent() {
   }, [cueFrom]);
   const showCue = cueFrom !== null && t.phrases.length === cueFrom && !t.partial && !t.error;
 
+  // Keep the newest words in view unless the reader has scrolled up to reread.
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [t.phrases, t.partial]);
+
   return (
-    <main className="mx-auto w-full max-w-[1180px] px-4 pb-16 pt-8 sm:px-8 sm:pt-12">
-      <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+    <main className="mx-auto flex h-dvh w-full max-w-[1180px] flex-col overflow-hidden px-4 pb-4 pt-5 sm:px-8 sm:pb-6 sm:pt-8">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-x-10 gap-y-3">
         <div className="max-w-[36rem]">
-          <h1 className="font-reading text-[3.25rem] leading-none tracking-[-0.02em] italic sm:text-[4.5rem]">
+          <h1 className="font-reading text-[2.6rem] leading-none tracking-[-0.02em] italic sm:text-[3.5rem]">
             Tangent
           </h1>
-          <p className="mt-3 text-[1.05rem] leading-snug text-[var(--ink-soft)]">
+          <p className="mt-2 hidden text-[1rem] leading-snug text-[var(--ink-soft)] sm:block">
             Talk about {labels}. Jev marks the topic of each phrase while you&rsquo;re still speaking, and the
             bars follow where the conversation drifts.
           </p>
@@ -57,7 +65,10 @@ export function Tangent() {
           )}
           {!empty && (
             <button
-              onClick={t.reset}
+              onClick={() => {
+                stick.current = true;
+                t.reset();
+              }}
               className="h-12 rounded-full px-4 text-[var(--ink-soft)] underline-offset-4 hover:underline"
             >
               Clear
@@ -67,13 +78,13 @@ export function Tangent() {
       </header>
 
       {t.error && (
-        <p role="alert" className="mt-6 rounded-lg border border-[var(--rule)] bg-[var(--panel)] px-4 py-3">
+        <p role="alert" className="mt-4 shrink-0 rounded-lg border border-[var(--rule)] bg-[var(--panel)] px-4 py-3">
           {t.error}
         </p>
       )}
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-16">
-        <aside className="self-start lg:sticky lg:top-10 lg:order-last">
+      <div className="mt-5 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 lg:mt-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-16">
+        <aside className="min-h-0 lg:order-last lg:overflow-y-auto">
           <NowPanel
             topics={t.topics}
             onTopics={t.setTopics}
@@ -84,37 +95,47 @@ export function Tangent() {
           />
         </aside>
 
-        <section aria-live="polite" className="min-h-[40vh]">
-          {empty ? (
-            <p className="font-reading text-[1.6rem] leading-[1.45] text-[var(--ink-soft)] sm:text-[2rem]">
-              Press <em>Start talking</em> and drift between {labels}. Each phrase gets the highlight of its
-              topic, and it can change mid-sentence.
-            </p>
-          ) : (
-            <p className="font-reading text-[1.6rem] leading-[1.5] sm:text-[2rem]">
-              {t.phrases.map((p) => (
-                <span key={p.id}>
-                  <Mark text={p.text} reading={p.reading} topics={t.topics} />{" "}
-                </span>
-              ))}
-              {t.partial && <Mark text={t.partial} reading={t.partialReading} topics={t.topics} pending />}
-              {t.listening && <span className="caret" aria-hidden />}
-            </p>
-          )}
+        <section className="flex min-h-0 flex-col">
+          <div
+            ref={scroller}
+            aria-live="polite"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+            }}
+            className="transcript min-h-0 flex-1 overflow-y-auto pr-1"
+          >
+            {empty ? (
+              <p className="font-reading text-[1.4rem] leading-[1.45] text-[var(--ink-soft)] sm:text-[1.75rem] lg:text-[2rem]">
+                Press <em>Start talking</em> and drift between {labels}. Each phrase gets the highlight of its
+                topic, and it can change mid-sentence.
+              </p>
+            ) : (
+              <p className="font-reading text-[1.4rem] leading-[1.5] sm:text-[1.75rem] lg:text-[2rem]">
+                {t.phrases.map((p) => (
+                  <span key={p.id}>
+                    <Mark text={p.text} reading={p.reading} topics={t.topics} />{" "}
+                  </span>
+                ))}
+                {t.partial && <Mark text={t.partial} reading={t.partialReading} topics={t.topics} pending />}
+                {t.listening && <span className="caret" aria-hidden />}
+              </p>
+            )}
+          </div>
+
+          <TypeInstead onType={t.typePartial} onCommit={t.typeCommit} />
+
+          <footer className="mt-3 shrink-0 text-xs leading-relaxed text-[var(--ink-soft)] sm:text-sm">
+            Your words aren&rsquo;t stored. ElevenLabs Scribe transcribes your voice live, and Jev by TypeSafe AI
+            picks the topic of each phrase.
+          </footer>
         </section>
       </div>
-
-      <TypeInstead onType={t.typePartial} onCommit={t.typeCommit} />
-
-      <footer className="mt-14 max-w-[40rem] text-sm leading-relaxed text-[var(--ink-soft)]">
-        Your words aren&rsquo;t stored. Your voice goes to ElevenLabs Scribe for live transcription, and each
-        phrase goes to Jev by TypeSafe AI, which answers with one topic and a probability for every topic.
-      </footer>
 
       {showCue && (
         <div
           role="status"
-          className="cue fixed bottom-8 left-1/2 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-3.5 rounded-2xl bg-[var(--ink)] px-6 py-4 text-[var(--paper)] shadow-[0_18px_40px_-16px_rgb(13_19_28/0.55)]"
+          className="cue fixed bottom-28 left-1/2 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-3.5 rounded-2xl bg-[var(--ink)] px-6 py-4 text-[var(--paper)] shadow-[0_18px_40px_-16px_rgb(13_19_28/0.55)]"
         >
           <span className="relative flex size-3 shrink-0">
             <span className="absolute inset-0 animate-ping rounded-full bg-[var(--p0)] opacity-70 motion-reduce:animate-none" />
@@ -171,9 +192,9 @@ function NowPanel({
   const ordered = [...topics, OTHER].sort((a, b) => (meters[b.id] ?? 0) - (meters[a.id] ?? 0));
 
   return (
-    <div className="rounded-2xl bg-[var(--panel)] p-6">
+    <div className="rounded-2xl bg-[var(--panel)] p-4 lg:p-6">
       <p className="text-sm text-[var(--ink-soft)]">You&rsquo;re talking about</p>
-      <p className="mt-1 font-reading text-[2.4rem] leading-tight italic" aria-live="polite">
+      <p className="mt-1 truncate font-reading text-[1.9rem] leading-tight italic lg:whitespace-normal lg:text-[2.4rem]" aria-live="polite">
         {current ? (
           <span className="mark" style={{ "--c": colorVar(topics, current) } as CSSProperties}>
             {labelOf(topics, current)}
@@ -183,7 +204,21 @@ function NowPanel({
         )}
       </p>
 
-      <ul className="mt-6 space-y-3">
+      <div
+        className="mt-3 flex h-3 overflow-hidden rounded-full bg-[var(--rule)]/60 lg:hidden"
+        role="img"
+        aria-label={ordered.map((topic) => `${topic.label} ${pct(meters[topic.id] ?? 0)}`).join(", ")}
+      >
+        {ordered.map((topic) => (
+          <span
+            key={topic.id}
+            className="bar block h-full"
+            style={{ "--c": colorVar(topics, topic.id), width: pct(meters[topic.id] ?? 0) } as CSSProperties}
+          />
+        ))}
+      </div>
+
+      <ul className="mt-6 hidden space-y-3 lg:block">
         {ordered.map((topic) => {
           const value = meters[topic.id] ?? 0;
           return (
@@ -200,7 +235,7 @@ function NowPanel({
         })}
       </ul>
 
-      <div className="mt-6 flex items-center justify-between gap-4 border-t border-[var(--rule)] pt-4">
+      <div className="mt-3 flex items-center justify-between gap-4 lg:mt-6 lg:border-t lg:border-[var(--rule)] lg:pt-4">
         <p className="text-sm leading-relaxed text-[var(--ink-soft)]">
           {reading ? (
             <>
@@ -223,7 +258,7 @@ function TypeInstead({ onType, onCommit }: { onType: (text: string) => void; onC
 
   return (
     <form
-      className="mt-12 max-w-[40rem]"
+      className="mt-4 shrink-0"
       onSubmit={(e) => {
         e.preventDefault();
         onCommit(value);
@@ -244,7 +279,7 @@ function TypeInstead({ onType, onCommit }: { onType: (text: string) => void; onC
           onType(e.target.value);
         }}
         placeholder="The central bank held rates steady this week"
-        className="mt-2 h-12 w-full rounded-xl border border-[var(--rule)] bg-[var(--panel)] px-4 text-base placeholder:text-[var(--ink-soft)]/70"
+        className="mt-1.5 h-11 w-full rounded-xl border border-[var(--rule)] bg-[var(--panel)] px-4 text-base placeholder:text-[var(--ink-soft)]/70"
       />
     </form>
   );

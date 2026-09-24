@@ -125,6 +125,13 @@ body {
   50% { opacity: 0; }
 }
 
+/* Older lines fade out under the header as the transcript scrolls. */
+.transcript {
+  padding-top: 2.25rem;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 2.25rem);
+  scrollbar-width: thin;
+}
+
 /* "Start talking" cue: the one orchestrated entrance on the page. */
 .cue {
   animation: cue-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
