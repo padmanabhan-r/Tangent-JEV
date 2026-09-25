@@ -1,10 +1,12 @@
 "use client";
 
 import { CommitStrategy, useScribe } from "@elevenlabs/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSarvam } from "@/lib/useSarvam";
 import { DEFAULT_TOPICS, OTHER, evenDistribution, type Distribution, type Topic, type TopicReading } from "@/lib/topics";
 
 export type Phrase = { id: number; text: string; reading: TopicReading | null };
+export type Provider = "elevenlabs" | "sarvam";
 
 const DEBOUNCE_MS = 220;
 const SMOOTHING = 0.45;
@@ -135,8 +137,30 @@ export function useTangent() {
     onError: (err) => setError(err instanceof Error ? err.message : "The microphone stream stopped."),
   });
 
+  // Sarvam: Indian languages, through the /api/listen relay. Credits are limited, so it is opt-in.
+  const [provider, setProvider] = useState<Provider>("elevenlabs");
+  const [language, setLanguage] = useState("auto");
+  const [heard, setHeard] = useState<string | null>(null);
+  const sarvam = useSarvam(
+    useMemo(
+      () => ({
+        onPartial: (text: string) => handlers.current.updatePartial(text),
+        onFinal: (text: string, lang: string | null) => {
+          if (lang) setHeard(lang);
+          void handlers.current.commit(text);
+        },
+        onError: (message: string) => setError(message),
+      }),
+      [],
+    ),
+  );
+
   const start = useCallback(async () => {
     setError(null);
+    if (provider === "sarvam") {
+      await sarvam.connect(language);
+      return;
+    }
     try {
       const res = await fetch("/api/scribe-token", { method: "POST" });
       const data = await res.json();
@@ -148,12 +172,13 @@ export function useTangent() {
     } catch (err) {
       setError((err as Error).message || "Could not start the microphone.");
     }
-  }, [scribe]);
+  }, [scribe, sarvam, provider, language]);
 
   const stop = useCallback(() => {
-    scribe.disconnect();
+    if (provider === "sarvam") sarvam.disconnect();
+    else scribe.disconnect();
     if (partial.trim()) void commit(partial);
-  }, [scribe, partial, commit]);
+  }, [scribe, sarvam, provider, partial, commit]);
 
   const reset = useCallback(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -166,6 +191,7 @@ export function useTangent() {
     setLastReading(null);
     setCalls(0);
     setError(null);
+    setHeard(null);
   }, []);
 
   const setTopics = useCallback(
@@ -187,8 +213,13 @@ export function useTangent() {
     lastReading,
     calls,
     error,
-    listening: scribe.isConnected,
-    connecting: scribe.status === "connecting",
+    listening: scribe.isConnected || sarvam.status === "listening",
+    connecting: scribe.status === "connecting" || sarvam.status === "connecting",
+    provider,
+    setProvider,
+    language,
+    setLanguage,
+    heard,
     start,
     stop,
     reset,

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* Newsreader for Latin; Noto Serif per Indian script for Sarvam transcripts. */
+  --font-reading: var(--font-news), var(--font-deva), var(--font-beng), var(--font-taml), var(--font-telu),
+    var(--font-knda), var(--font-mlym), var(--font-gujr), var(--font-guru), var(--font-orya), var(--font-urdu), serif;
   --paper: #e8ecf0;
   --panel: #f4f6f8;
   --ink: #18212e;

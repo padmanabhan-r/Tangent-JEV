@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { TopicEditor } from "@/components/TopicEditor";
 import { OTHER, colorVar, type Distribution, type Topic, type TopicReading } from "@/lib/topics";
-import { useTangent } from "@/lib/useTangent";
+import { LANGUAGES, languageName } from "@/lib/languages";
+import { useTangent, type Provider } from "@/lib/useTangent";
 
 const CUE_MS = 4000;
 
@@ -32,49 +33,56 @@ export function Tangent() {
 
   return (
     <main className="mx-auto flex h-dvh w-full max-w-[1180px] flex-col overflow-hidden px-4 pb-4 pt-5 sm:px-8 sm:pb-6 sm:pt-8">
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-x-10 gap-y-3">
-        <div className="max-w-[36rem]">
-          <h1 className="font-reading text-[2.6rem] leading-none tracking-[-0.02em] italic sm:text-[3.5rem]">
+      <header className="shrink-0">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="font-reading text-[2.2rem] leading-none tracking-[-0.02em] italic sm:text-[3.5rem]">
             Tangent
           </h1>
-          <p className="mt-2 hidden text-[1rem] leading-snug text-[var(--ink-soft)] sm:block">
-            Talk about {labels}. Jev marks the topic of each phrase while you&rsquo;re still speaking, and the
-            bars follow where the conversation drifts.
-          </p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {t.listening ? (
+              <button
+                onClick={t.stop}
+                className="inline-flex h-12 items-center gap-2.5 rounded-full bg-[var(--ink)] px-6 font-medium text-[var(--paper)]"
+              >
+                <span className="size-2.5 animate-pulse rounded-full bg-[#ff6b5e] motion-reduce:animate-none" />
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setCueFrom(t.phrases.length);
+                  void t.start();
+                }}
+                disabled={t.connecting}
+                className="inline-flex h-12 items-center whitespace-nowrap rounded-full bg-[var(--ink)] px-5 font-medium text-[var(--paper)] disabled:opacity-60 sm:px-6"
+              >
+                {t.connecting ? "Connecting…" : "Start talking"}
+              </button>
+            )}
+            {!empty && (
+              <button
+                onClick={() => {
+                  stick.current = true;
+                  t.reset();
+                }}
+                className="h-12 rounded-full px-2 text-[var(--ink-soft)] underline-offset-4 hover:underline sm:px-4"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {t.listening ? (
-            <button
-              onClick={t.stop}
-              className="inline-flex h-12 items-center gap-2.5 rounded-full bg-[var(--ink)] px-6 font-medium text-[var(--paper)]"
-            >
-              <span className="size-2.5 animate-pulse rounded-full bg-[#ff6b5e] motion-reduce:animate-none" />
-              Stop
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setCueFrom(t.phrases.length);
-                void t.start();
-              }}
-              disabled={t.connecting}
-              className="inline-flex h-12 items-center rounded-full bg-[var(--ink)] px-6 font-medium text-[var(--paper)] disabled:opacity-60"
-            >
-              {t.connecting ? "Connecting…" : "Start talking"}
-            </button>
-          )}
-          {!empty && (
-            <button
-              onClick={() => {
-                stick.current = true;
-                t.reset();
-              }}
-              className="h-12 rounded-full px-4 text-[var(--ink-soft)] underline-offset-4 hover:underline"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        <p className="mt-2 hidden max-w-[44rem] text-[1rem] leading-snug text-[var(--ink-soft)] sm:block">
+          {t.provider === "sarvam" ? "Talk in English or an Indian language" : "Talk"} about {labels}. Jev marks the
+          topic of each phrase while you&rsquo;re still speaking, and the bars follow where the conversation drifts.
+        </p>
+        <EngineSwitch
+          provider={t.provider}
+          onProvider={t.setProvider}
+          language={t.language}
+          onLanguage={t.setLanguage}
+          locked={t.listening || t.connecting}
+        />
       </header>
 
       {t.error && (
@@ -92,6 +100,7 @@ export function Tangent() {
             meters={t.meters}
             reading={t.lastReading}
             calls={t.calls}
+            heard={t.provider === "sarvam" ? languageName(t.heard) : null}
           />
         </aside>
 
@@ -126,8 +135,8 @@ export function Tangent() {
           <TypeInstead onType={t.typePartial} onCommit={t.typeCommit} />
 
           <footer className="mt-3 shrink-0 text-xs leading-relaxed text-[var(--ink-soft)] sm:text-sm">
-            Your words aren&rsquo;t stored. ElevenLabs Scribe transcribes your voice live, and Jev by TypeSafe AI
-            picks the topic of each phrase.
+            Your words aren&rsquo;t stored. {t.provider === "sarvam" ? "Sarvam" : "ElevenLabs Scribe"} transcribes your
+            voice live, and Jev by TypeSafe AI picks the topic of each phrase.
           </footer>
         </section>
       </div>
@@ -181,6 +190,7 @@ function NowPanel({
   meters,
   reading,
   calls,
+  heard,
 }: {
   topics: Topic[];
   onTopics: (topics: Topic[]) => void;
@@ -188,6 +198,7 @@ function NowPanel({
   meters: Distribution;
   reading: TopicReading | null;
   calls: number;
+  heard: string | null;
 }) {
   const ordered = [...topics, OTHER].sort((a, b) => (meters[b.id] ?? 0) - (meters[a.id] ?? 0));
 
@@ -239,6 +250,11 @@ function NowPanel({
         <p className="text-sm leading-relaxed text-[var(--ink-soft)]">
           {reading ? (
             <>
+              {heard && (
+                <>
+                  Heard in <span className="text-[var(--ink)]">{heard}</span>.{" "}
+                </>
+              )}
               Jev answered in <span className="text-[var(--ink)]">{reading.ms} ms</span>. {calls}{" "}
               {calls === 1 ? "call" : "calls"} so far.
             </>
@@ -295,4 +311,65 @@ function listOf(items: string[]) {
 
 function pct(n: number) {
   return `${Math.round(n * 100)}%`;
+}
+
+function EngineSwitch({
+  provider,
+  onProvider,
+  language,
+  onLanguage,
+  locked,
+}: {
+  provider: Provider;
+  onProvider: (p: Provider) => void;
+  language: string;
+  onLanguage: (code: string) => void;
+  locked: boolean;
+}) {
+  const options: { id: Provider; label: string }[] = [
+    { id: "elevenlabs", label: "ElevenLabs" },
+    { id: "sarvam", label: "Sarvam" },
+  ];
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm sm:mt-4">
+      <span id="engine-label" className="sr-only text-[var(--ink-soft)] sm:not-sr-only">
+        Listen with
+      </span>
+      <div role="radiogroup" aria-labelledby="engine-label" className="flex rounded-full bg-[var(--panel)] p-1">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={provider === o.id}
+            disabled={locked}
+            onClick={() => onProvider(o.id)}
+            className={`rounded-full px-3.5 py-1.5 font-medium transition-colors disabled:cursor-not-allowed ${
+              provider === o.id ? "bg-[var(--ink)] text-[var(--paper)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            }`}
+          >
+            {o.label}
+            {o.id === "sarvam" && <span className="hidden sm:inline"> (Indian languages)</span>}
+          </button>
+        ))}
+      </div>
+      {provider === "sarvam" && (
+        <select
+          aria-label="Language"
+          value={language}
+          disabled={locked}
+          onChange={(e) => onLanguage(e.target.value)}
+          className="h-9 max-w-[9.5rem] rounded-full sm:max-w-[11rem] border border-[var(--rule)] bg-[var(--panel)] px-3 font-medium disabled:opacity-60"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.native && l.native !== l.label ? `${l.label} (${l.native})` : l.label}
+            </option>
+          ))}
+        </select>
+      )}
+      {provider === "sarvam" && language === "auto" && (
+        <span className="hidden text-[var(--ink-soft)] lg:inline">Pick your language to see live text in its own script.</span>
+      )}
+    </div>
+  );
 }
